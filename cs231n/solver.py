@@ -14,7 +14,7 @@ class Solver(object):
   data to watch out for overfitting.
 
   To train a model, you will first construct a Solver instance, passing the
-  model, dataset, and various optoins (learning rate, batch size, etc) to the
+  model, dataset, and various options (learning rate, batch size, etc) to the
   constructor. You will then call the train() method to run the optimization
   procedure and train the model.
   
@@ -90,7 +90,8 @@ class Solver(object):
       passed to the chosen update rule. Each update rule requires different
       hyperparameters (see optim.py) but all update rules require a
       'learning_rate' parameter so that should always be present.
-    - lr_decay: A scalar for learning rate decay; after each epoch the learning
+    - lr_decay: A scalar for learning rate decay;                   num_epochs=10, batch_size=100,
+after each epoch the learning
       rate is multiplied by this value.
     - batch_size: Size of minibatches used to compute loss and gradient during
       training.
