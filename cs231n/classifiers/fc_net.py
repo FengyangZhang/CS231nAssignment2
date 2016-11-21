@@ -186,13 +186,12 @@ class FullyConnectedNet(object):
     # first layer in gamma1 and beta1; for the second layer use gamma2 and     #
     # beta2, etc. Scale parameters should be initialized to one and shift      #
     # parameters should be initialized to zero.                                #
-    ############################################################################       
-    self.layer_num = len(hidden_dims) + 1
+    ############################################################################ 
     self.input_dim = input_dim
     self.num_classes = num_classes
     dims = [self.input_dim] + hidden_dims + [self.num_classes]
-    Ws = {'W' + str(i + 1):
-          weight_scale * np.random.randn(dims[i], dims[i + 1]) for i in range(len(dims) - 1)}
+    Ws = {'W' + str(i + 1): weight_scale * np.random.randn(dims[i], dims[i + 1]) 
+          for i in range(len(dims) - 1)}
     b = {'b' + str(i + 1): np.zeros(dims[i + 1])
          for i in range(len(dims) - 1)}
 
@@ -218,8 +217,15 @@ class FullyConnectedNet(object):
     # pass of the second batch normalization layer, etc.
     self.bn_params = []
     if self.use_batchnorm:
-      self.bn_params = [{'mode': 'train'} for i in xrange(self.num_layers - 1)]
+      self.bn_params = {'bn_param' + str(i + 1): {'mode': 'train'}
+                              for i in xrange(len(dims) - 2)}
+      gammas = {'gamma' + str(i + 1):
+                np.ones(dims[i + 1]) for i in xrange(self.num_layers - 1)}
+      betas = {'beta' + str(i + 1): np.zeros(dims[i + 1])
+               for i in xrange(self.num_layers - 1)}
     
+      self.params.update(betas)
+      self.params.update(gammas)
     # Cast all parameters to the correct datatype
     for k, v in self.params.iteritems():
       self.params[k] = v.astype(dtype)
@@ -237,9 +243,9 @@ class FullyConnectedNet(object):
     # Set train/test mode for batchnorm params and dropout param since they
     # behave differently during training and testing.
     if self.dropout_param is not None:
-      self.dropout_param['mode'] = mode   
+      self.dropout_param['mode'] = mode
     if self.use_batchnorm:
-      for bn_param in self.bn_params:
+      for key, bn_param in self.bn_params.iteritems():
         bn_param[mode] = mode
 
     scores = None
@@ -258,23 +264,37 @@ class FullyConnectedNet(object):
     hidden = {}
     hidden['h0'] = X.reshape(X.shape[0], np.prod(X.shape[1:]))
 
-    for i in xrange(self.layer_num):
+    for i in xrange(self.num_layers):
       idx = i + 1
       w = self.params['W' + str(idx)]
       b = self.params['b' + str(idx)]
       h = hidden['h' + str(idx - 1)]
-
-      if idx == self.layer_num:
+      
+      # set batchnorm parameters
+      if self.use_batchnorm and idx != self.num_layers:
+        gamma = self.params['gamma' + str(idx)]
+        beta = self.params['beta' + str(idx)]
+        bn_param = self.bn_params['bn_param' + str(idx)]
+      
+      # forward last layer
+      if idx == self.num_layers:
         h, cache_h = affine_forward(h, w, b)
         hidden['h' + str(idx)] = h
         hidden['cache_h' + str(idx)] = cache_h
-        
+      
+      # forward other layers
       else:
-        h, cache_h = affine_relu_forward(h, w, b)
-        hidden['h' + str(idx)] = h
-        hidden['cache_h' + str(idx)] = cache_h
+        if self.use_batchnorm:
+          h, cache_h = affine_norm_relu_forward(
+          h, w, b, gamma, beta, bn_param)
+          hidden['h' + str(idx)] = h
+          hidden['cache_h' + str(idx)] = cache_h
+        else:
+          h, cache_h = affine_relu_forward(h, w, b)
+          hidden['h' + str(idx)] = h
+          hidden['cache_h' + str(idx)] = cache_h
 
-    scores = hidden['h' + str(self.layer_num)]
+    scores = hidden['h' + str(self.num_layers)]
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -303,34 +323,72 @@ class FullyConnectedNet(object):
       reg_loss += 0.5 * self.reg * np.sum(w * w)
     loss = data_loss + reg_loss
 
-    hidden['dh' + str(self.layer_num)] = dscores
+    hidden['dh' + str(self.num_layers)] = dscores
     
-    for i in range(self.layer_num)[::-1]:
+    for i in range(self.num_layers)[::-1]:
       idx = i + 1
       dh = hidden['dh' + str(idx)]
       h_cache = hidden['cache_h' + str(idx)]
-      if idx == self.layer_num:
+      
+      # backprop last layer
+      if idx == self.num_layers:
         dh, dw, db = affine_backward(dh, h_cache)
         hidden['dh' + str(idx - 1)] = dh
         hidden['dW' + str(idx)] = dw
         hidden['db' + str(idx)] = db
         
+      # backprop other layers  
       else:
-        dh, dw, db = affine_relu_backward(dh, h_cache)
-        hidden['dh' + str(idx - 1)] = dh
-        hidden['dW' + str(idx)] = dw
-        hidden['db' + str(idx)] = db
+        if self.use_batchnorm:
+          dh, dw, db, dgamma, dbeta = affine_norm_relu_backward(
+            dh, h_cache)
+          hidden['dh' + str(idx - 1)] = dh
+          hidden['dW' + str(idx)] = dw
+          hidden['db' + str(idx)] = db
+          hidden['dgamma' + str(idx)] = dgamma
+          hidden['dbeta' + str(idx)] = dbeta
+        else:
+          dh, dw, db = affine_relu_backward(dh, h_cache)
+          hidden['dh' + str(idx - 1)] = dh
+          hidden['dW' + str(idx)] = dw
+          hidden['db' + str(idx)] = db
 
+    # Parameter w        
     list_dw = {key[1:]: val + self.reg * self.params[key[1:]]
                for key, val in hidden.iteritems() if key[:2] == 'dW'}
-        # Paramerters b
+    # Parameter b
     list_db = {key[1:]: val for key, val in hidden.iteritems() if key[:2] ==
                'db'}
-
+    # Parameter gamma
+    list_dgamma = {key[1:]: val for key, val in hidden.iteritems() if key[
+                   :6] == 'dgamma'}
+    # Paramters beta
+    list_dbeta = {key[1:]: val for key, val in hidden.iteritems() if key[
+                  :5] == 'dbeta'}
+    
     grads.update(list_dw)
     grads.update(list_db)
+    grads.update(list_dgamma)
+    grads.update(list_dbeta)
     ############################################################################
-    #                             END OF YOUR CODE                             #
+    #                             END OF YOUR CODE   
+    #
     ############################################################################
 
     return loss, grads
+
+
+def affine_norm_relu_forward(x, w, b, gamma, beta, bn_param):
+  a, fc_cache = affine_forward(x, w, b)
+  a_norm, a_norm_cache = batchnorm_forward(a, gamma, beta, bn_param)
+  out, relu_cache = relu_forward(a_norm)
+  cache = (fc_cache, a_norm_cache, relu_cache)
+  return out, cache
+
+
+def affine_norm_relu_backward(dout, cache):
+  fc_cache, a_norm_cache, relu_cache = cache
+  da = relu_backward(dout, relu_cache)
+  da_norm, dgamma, dbeta = batchnorm_backward(da, a_norm_cache)
+  dx, dw, db = affine_backward(da_norm, fc_cache)
+  return dx, dw, db, dgamma, dbeta
