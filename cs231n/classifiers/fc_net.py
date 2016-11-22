@@ -263,13 +263,19 @@ class FullyConnectedNet(object):
     ############################################################################
     hidden = {}
     hidden['h0'] = X.reshape(X.shape[0], np.prod(X.shape[1:]))
-
+    
+    if self.use_dropout:
+      hdrop, cache_hdrop = dropout_forward(hidden['h0'], self.dropout_param)
+      hidden['hdrop0'], hidden['cache_hdrop0'] = hdrop, cache_hdrop
+            
     for i in xrange(self.num_layers):
       idx = i + 1
       w = self.params['W' + str(idx)]
       b = self.params['b' + str(idx)]
       h = hidden['h' + str(idx - 1)]
-      
+      # set dropout parameters
+      if self.use_dropout:
+        h = hidden['hdrop' + str(idx - 1)]
       # set batchnorm parameters
       if self.use_batchnorm and idx != self.num_layers:
         gamma = self.params['gamma' + str(idx)]
@@ -293,6 +299,11 @@ class FullyConnectedNet(object):
           h, cache_h = affine_relu_forward(h, w, b)
           hidden['h' + str(idx)] = h
           hidden['cache_h' + str(idx)] = cache_h
+        if self.use_dropout:
+          h = hidden['h' + str(idx)]
+          hdrop, cache_hdrop = dropout_forward(h, self.dropout_param)
+          hidden['hdrop' + str(idx)] = hdrop
+          hidden['cache_hdrop' + str(idx)] = cache_hdrop
 
     scores = hidden['h' + str(self.num_layers)]
     ############################################################################
@@ -339,6 +350,9 @@ class FullyConnectedNet(object):
         
       # backprop other layers  
       else:
+        if self.use_dropout:
+          cache_hdrop = hidden['cache_hdrop' + str(idx)]
+          dh = dropout_backward(dh, cache_hdrop)
         if self.use_batchnorm:
           dh, dw, db, dgamma, dbeta = affine_norm_relu_backward(
             dh, h_cache)
