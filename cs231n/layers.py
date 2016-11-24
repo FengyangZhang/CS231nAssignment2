@@ -164,7 +164,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     # Use minibatch statistics to compute the mean and variance, use these      #
     # statistics to normalize the incoming data, and scale and shift the        #
     # normalized data using gamma and beta.                                     #
-    #                                                                           #
+    #                                                                    ,       #
     # You should store the output in the variable out. Any intermediates that   #
     # you need for the backward pass should be stored in the cache variable.    #
     #                                                                           #
@@ -175,7 +175,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     # Forward pass
     mu = 1 / float(N) * np.sum(x, axis=0)
     xmu = x - mu
-    # Step 3 - shape of carre (N,D)
+    # Step 3 - shape of carre (N,D),
     carre = xmu**2
 
     # Step 4 - shape of var (D,)
@@ -234,7 +234,7 @@ def batchnorm_backward(dout, cache):
   
   For this implementation, you should write out a computation graph for
   batch normalization on paper and propagate gradients backward through
-  intermediate nodes.
+  intermediate nodes.,
   
   Inputs:
   - dout: Upstream derivatives, of shape (N, D)
@@ -493,6 +493,7 @@ def conv_backward_naive(dout, cache):
             
   db = np.zeros((F))
   for f in range(F):
+  
     db[f] = np.sum(dout[:, f, :, :])
   
   dx = np.zeros((N, C, H, W))
@@ -508,18 +509,19 @@ def conv_backward_naive(dout, cache):
                 row_num = i + pad - k * stride
               else: 
                 related = False
-              #   find the related weight's col num, if out of range, set False
+              # find the related weight's col num, if out of range, set False
               if (j + pad - l * stride) < WW and (j + pad - l * stride) >= 0:
                 col_num = j + pad - l * stride
               else: 
                 related = False
-              if(related == True):
+              if (related == True):
                 w_related = w[f, :, row_num, col_num]
                 dx[n, :, i, j] += dout[n, f, k, l] * w_related
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
   return dx, dw, db
+  
 
 
 def max_pool_forward_naive(x, pool_param):
@@ -527,25 +529,45 @@ def max_pool_forward_naive(x, pool_param):
   A naive implementation of the forward pass for a max pooling layer.
 
   Inputs:
+  
   - x: Input data, of shape (N, C, H, W)
   - pool_param: dictionary with the following keys:
     - 'pool_height': The height of each pooling region
     - 'pool_width': The width of each pooling region
+  pool_width = pool_param['pool_width']
     - 'stride': The distance between adjacent pooling regions
 
   Returns a tuple of:
   - out: Output data
   - cache: (x, pool_param)
   """
-  out = None
   #############################################################################
   # TODO: Implement the max pooling forward pass                              #
   #############################################################################
-  pass
+  N, C, H, W = x.shape
+  pool_width = pool_param['pool_width']
+  pool_height = pool_param['pool_height']
+  stride = pool_param['stride']
+
+  assert (H - pool_height) % stride == 0
+  assert (W - pool_width) % stride == 0 
+
+  out_h = (H - pool_height) / stride + 1
+  out_w = (W - pool_width) / stride + 1
+  out = np.zeros((N, C, out_h, out_w))
+  max_index = np.zeros((N, C, out_h, out_w, 2))
+  
+  for n in xrange(N):
+    for c in xrange(C):
+      for k in xrange(out_h):
+        for l in xrange(out_w):
+          pool = x[n, c, k * stride : k * stride + pool_height, l * stride : l * stride + pool_width]
+          max_index[n, c, k, l] = (np.argmax(pool) / pool_height, np.argmax(pool) % pool_height)
+          out[n, c, k, l] = pool[max_index[n, c, k, l, 0], max_index[n, c, k, l, 1]]
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
-  cache = (x, pool_param)
+  cache = (x, max_index, pool_param)
   return out, cache
 
 
@@ -560,11 +582,19 @@ def max_pool_backward_naive(dout, cache):
   Returns:
   - dx: Gradient with respect to x
   """
-  dx = None
   #############################################################################
   # TODO: Implement the max pooling backward pass                             #
   #############################################################################
-  pass
+  x, max_index, pool_param = cache
+  N, C, K, L = dout.shape
+  stride = pool_param['stride']
+
+  dx = np.zeros_like(x)
+  for n in xrange(N):
+    for c in xrange(C):
+      for k in xrange(K):
+        for l in xrange(L):
+          dx[n, c, k * stride + max_index[n, c, k, l, 0], l * stride + max_index[n, c, k, l, 1]] = dout[n, c, k, l]
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
