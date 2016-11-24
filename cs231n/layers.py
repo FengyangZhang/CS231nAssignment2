@@ -502,15 +502,20 @@ def conv_backward_naive(dout, cache):
         for f in range(F):
           for k in range(Out_h):
             for l in range(Out_w):
-              mask1 = np.zeros_like(w[f, :, :, :])
-              mask2 = np.zeros_like(w[f, :, :, :])
+              related = True
+              # find the related weight's row num, if out of range, set False
               if (i + pad - k * stride) < HH and (i + pad - k * stride) >= 0:
-                mask1[:, i + pad - k * stride, :] = 1.0
+                row_num = i + pad - k * stride
+              else: 
+                related = False
+              #   find the related weight's col num, if out of range, set False
               if (j + pad - l * stride) < WW and (j + pad - l * stride) >= 0:
-                mask2[:, :, j + pad - l * stride] = 1.0
-              w_masked = np.sum(w[f, :, :, :] * mask1 * mask2, axis=(1, 2))
-              dx[n, :, i, j] += dout[n, f, k, l] * w_masked
-
+                col_num = j + pad - l * stride
+              else: 
+                related = False
+              if(related == True):
+                w_related = w[f, :, row_num, col_num]
+                dx[n, :, i, j] += dout[n, f, k, l] * w_related
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
